@@ -1,0 +1,20 @@
+{% extends "planner/base.html" %}{% load static %}
+{% block content %}
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <div class="btn-group">
+    <button class="btn btn-outline-secondary" id="prev">‹</button>
+    <button class="btn btn-outline-secondary" id="hoy">Hoy</button>
+    <button class="btn btn-outline-secondary" id="next">›</button>
+  </div>
+  <h5 class="mb-0" id="rango"></h5>
+  <span class="badge text-bg-light border" id="stats"></span>
+  <div class="btn-group ms-auto" id="modo">
+    <button class="btn btn-outline-primary" data-modo="dia">Día</button>
+    <button class="btn btn-outline-primary" data-modo="semana">Semana</button>
+  </div>
+  <button class="btn btn-primary d-none d-md-block" id="nuevo">+ Actividad</button>
+</div>
+<div id="vista"></div>
+<button class="fab d-md-none" id="nuevo2" aria-label="Nueva actividad">+</button>
+{% endblock %}
+{% block scripts %}<script src="{% static 'planner/semana.js' %}"></script>{% endblock %}

@@ -1,0 +1,52 @@
+{% extends "planner/base.html" %}{% load static %}
+{% block content %}
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <div class="btn-group">
+    <button class="btn btn-outline-secondary" id="prev">‹</button>
+    <button class="btn btn-outline-secondary" id="hoy">Esta semana</button>
+    <button class="btn btn-outline-secondary" id="next">›</button>
+  </div>
+  <h5 class="mb-0" id="rango"></h5>
+  <div class="ms-auto d-flex gap-2">
+    <button class="btn btn-outline-secondary" id="copiar">Copiar semana anterior</button>
+    <button class="btn btn-primary d-none d-md-block" id="nueva">+ Acción</button>
+  </div>
+</div>
+<div id="regla" class="alert py-2"></div>
+<div class="row g-3" id="lista"></div>
+<button class="fab d-md-none" id="nueva2" aria-label="Nueva acción">+</button>
+
+<div class="card mt-4"><div class="card-body small">
+  <h6>Reglas del sistema</h6>
+  <ul class="mb-0">
+    <li><b>Regla de 5 minutos.</b> Si no tengo ganas, empiezo igual 5 minutos. Después decido si sigo.</li>
+    <li><b>Lanzar va primero.</b> Si en la semana no hice ninguna acción de lanzamiento, no hay bloque de construir.</li>
+    <li><b>El backlog no frena.</b> Lo que no impide que un cliente use el sistema, espera.</li>
+    <li><b>Nombrar el pensamiento.</b> «Estoy teniendo el pensamiento de que todavía no está listo.» Y sigo con lo que toca.</li>
+    <li><b>Si fallo un bloque, no recupero:</b> sigo con el próximo.</li>
+  </ul>
+</div></div>
+
+<div class="modal fade" id="accionModal" tabindex="-1">
+  <div class="modal-dialog modal-fullscreen-sm-down"><form class="modal-content" id="accionForm" novalidate>
+    <div class="modal-header"><h5 class="modal-title">Acción de lanzamiento</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body vstack gap-3">
+      <div class="row g-2">
+        <div class="col-6"><label class="form-label">Cuando sea…</label><input class="form-control" name="cuando" maxlength="120" placeholder="martes 18:30"></div>
+        <div class="col-6"><label class="form-label">En…</label><input class="form-control" name="donde" maxlength="120" placeholder="mi escritorio"></div>
+      </div>
+      <div><label class="form-label">Voy a…</label><input class="form-control" name="accion" required maxlength="300" placeholder="contactar a 3 clientes"></div>
+      <div><label class="form-label">Fecha (opcional, aparece en la vista Día)</label><input type="date" class="form-control" name="fecha"></div>
+      <div><label class="form-label">Notas</label><textarea class="form-control" name="notas" rows="2"></textarea></div>
+      <div class="text-danger small" id="accionErr"></div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-outline-danger me-auto d-none" id="accionDel">Eliminar</button>
+      <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+      <button class="btn btn-primary">Guardar</button>
+    </div>
+  </form></div>
+</div>
+{% endblock %}
+{% block scripts %}<script src="{% static 'planner/lanzamiento.js' %}"></script>{% endblock %}

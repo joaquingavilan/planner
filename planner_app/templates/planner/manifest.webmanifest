@@ -1,0 +1,21 @@
+{% load static %}{
+  "name": "Mi semana",
+  "short_name": "Mi semana",
+  "description": "Planificador semanal",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f5f7fa",
+  "theme_color": "#1E3A5F",
+  "lang": "es",
+  "icons": [
+    {"src": "{% static 'planner/icons/icon-192.png' %}", "sizes": "192x192", "type": "image/png"},
+    {"src": "{% static 'planner/icons/icon-512.png' %}", "sizes": "512x512", "type": "image/png"},
+    {"src": "{% static 'planner/icons/maskable-512.png' %}", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ],
+  "shortcuts": [
+    {"name": "Lanzamiento", "url": "/lanzamiento/"},
+    {"name": "Configuración", "url": "/configuracion/"}
+  ]
+}

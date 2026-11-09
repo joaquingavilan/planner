@@ -1,0 +1,17 @@
+{% load static %}<!doctype html>
+<html lang="es"><head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1E3A5F"><title>Mi semana · Ingresar</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="{% static 'planner/icons/apple-touch-icon.png' %}">
+  <link rel="stylesheet" href="{% static 'planner/vendor/bootstrap.min.css' %}">
+  <style>body{background:#1E3A5F;min-height:100dvh;display:grid;place-items:center;padding:16px}.card{border:0;border-radius:16px;width:100%;max-width:360px}</style>
+</head><body>
+<form method="post" class="card p-4 shadow">{% csrf_token %}
+  <div class="text-center mb-3"><img src="{% static 'planner/icons/icon-192.png' %}" width="64" height="64" class="rounded-3 mb-2" alt=""><h4>Mi semana</h4></div>
+  {% if form.errors %}<div class="alert alert-danger py-2 small">Usuario o contraseña incorrectos.</div>{% endif %}
+  <input class="form-control mb-2" name="username" placeholder="Usuario" autocomplete="username" autocapitalize="none" required autofocus>
+  <input class="form-control mb-3" type="password" name="password" placeholder="Contraseña" autocomplete="current-password" required>
+  <input type="hidden" name="next" value="{{ next }}">
+  <button class="btn btn-primary w-100">Ingresar</button>
+</form></body></html>

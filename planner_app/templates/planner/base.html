@@ -1,0 +1,78 @@
+{% load static %}<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1E3A5F">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="{% static 'planner/icons/icon-192.png' %}">
+  <link rel="apple-touch-icon" href="{% static 'planner/icons/apple-touch-icon.png' %}">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Mi semana">
+  <meta name="csrf" content="{{ csrf_token }}">
+  <title>Mi semana</title>
+  <link rel="stylesheet" href="{% static 'planner/vendor/bootstrap.min.css' %}">
+  <link rel="stylesheet" href="{% static 'planner/style.css' %}">
+</head>
+<body>
+<nav class="navbar navbar-dark app-nav">
+  <div class="container-fluid">
+    <span class="navbar-brand fw-semibold mb-0"><img src="{% static 'planner/icons/icon-192.png' %}" width="26" height="26" class="rounded me-2" alt="">Mi semana</span>
+    <span class="badge text-bg-warning d-none" id="offline">Sin conexión</span>
+    <div class="navbar-nav flex-row gap-3 ms-auto d-none d-md-flex">
+      <a class="nav-link {% if nav == 'semana' %}active{% endif %}" href="{% url 'semana' %}">Semana</a>
+      <a class="nav-link {% if nav == 'lanzamiento' %}active{% endif %}" href="{% url 'lanzamiento' %}">Lanzamiento</a>
+      <a class="nav-link {% if nav == 'configuracion' %}active{% endif %}" href="{% url 'configuracion' %}">Configuración</a>
+      <form method="post" action="{% url 'logout' %}" class="m-0">{% csrf_token %}<button class="nav-link btn btn-link p-0 border-0">Salir</button></form>
+    </div>
+  </div>
+</nav>
+<nav class="tabbar d-md-none">
+  <a class="{% if nav == 'semana' %}active{% endif %}" href="{% url 'semana' %}"><span>📅</span>Semana</a>
+  <a class="{% if nav == 'lanzamiento' %}active{% endif %}" href="{% url 'lanzamiento' %}"><span>🚀</span>Lanzamiento</a>
+  <a class="{% if nav == 'configuracion' %}active{% endif %}" href="{% url 'configuracion' %}"><span>⚙️</span>Ajustes</a>
+</nav>
+
+<main class="container-fluid py-3 app-main">{% block content %}{% endblock %}</main>
+
+<div id="toasts" class="toast-container position-fixed bottom-0 end-0 p-3"></div>
+
+<!-- Modal de bloque (horario) compartido por Semana y Configuración -->
+<div class="modal fade" id="bloqueModal" tabindex="-1">
+  <div class="modal-dialog modal-fullscreen-sm-down"><form class="modal-content" id="bloqueForm" novalidate>
+    <div class="modal-header"><h5 class="modal-title" id="bloqueTitulo">Actividad</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body vstack gap-3">
+      <div><label class="form-label">Título</label><input class="form-control" name="titulo" required maxlength="120"></div>
+      <div><label class="form-label">Categoría</label><select class="form-select" name="categoria"></select></div>
+      <div class="row g-2">
+        <div class="col"><label class="form-label">Desde</label><input type="time" class="form-control" name="inicio" step="300" required></div>
+        <div class="col"><label class="form-label">Hasta</label><input type="time" class="form-control" name="fin" step="300" required></div>
+      </div>
+      <div id="diasMulti"><label class="form-label">Días</label><div class="d-flex flex-wrap gap-2" id="diasChecks"></div></div>
+      <div id="diaUno" class="d-none"><label class="form-label">Día</label><select class="form-select" name="dia"></select></div>
+      <div><label class="form-label">Nota</label><input class="form-control" name="nota" maxlength="300"></div>
+      <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="seguimiento" id="segChk">
+        <label class="form-check-label" for="segChk">Marcar como hecha / no hecha</label></div>
+      <div class="text-danger small" id="bloqueErr"></div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-outline-danger me-auto d-none" id="bloqueDel">Eliminar</button>
+      <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+      <button class="btn btn-primary">Guardar</button>
+    </div>
+  </form></div>
+</div>
+
+<script src="{% static 'planner/vendor/bootstrap.bundle.min.js' %}"></script>
+<script src="{% static 'planner/common.js' %}"></script>
+<script>
+  if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('/sw.js', {scope: '/'}));
+  const off = () => document.getElementById('offline').classList.toggle('d-none', navigator.onLine);
+  addEventListener('online', off); addEventListener('offline', off); off();
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>
