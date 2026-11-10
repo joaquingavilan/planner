@@ -9,7 +9,7 @@ function render() {
 
   $('#cats').innerHTML = S.categorias.map(catRow).join('');
 
-  const por = DIAS.map((n, i) => [n, S.bloques.filter(b => b.dia === i)]);
+  const por = DIAS.map((n, i) => [n, S.bloques.filter(b => b.dia === i && !b.fecha)]);
   $('#horarios').innerHTML = `<div class="table-responsive"><table class="table table-sm align-middle mb-0"><tbody>` +
     por.map(([n, bs]) => `<tr class="table-light"><th colspan="4">${n}</th></tr>` + (bs.map(b => {
       const c = S.categorias.find(c => c.id === b.categoria);

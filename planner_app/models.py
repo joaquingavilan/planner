@@ -24,7 +24,7 @@ class Categoria(models.Model):
 
 
 class Bloque(models.Model):
-    """Actividad recurrente semanal (plantilla)."""
+    """Actividad recurrente semanal (plantilla), o puntual si tiene `fecha` (p. ej. una reprogramación)."""
 
     dia = models.PositiveSmallIntegerField(choices=list(enumerate(DIAS)))  # 0 = lunes
     inicio = models.TimeField()
@@ -34,6 +34,7 @@ class Bloque(models.Model):
     categoria = models.ForeignKey(Categoria, on_delete=models.PROTECT, related_name="bloques")
     seguimiento = models.BooleanField(default=False, help_text="Permite marcar hecha / no hecha")
     creado = models.DateTimeField(default=timezone.now, editable=False)  # no se vencen ocurrencias anteriores
+    fecha = models.DateField(null=True, blank=True, help_text="Solo para actividades puntuales (no recurrentes)")
 
     class Meta:
         ordering = ["dia", "inicio"]
@@ -41,6 +42,11 @@ class Bloque(models.Model):
     def clean(self):
         if self.inicio and self.fin and self.fin <= self.inicio:
             raise ValidationError({"fin": "El fin debe ser posterior al inicio."})
+
+    def save(self, *args, **kwargs):
+        if self.fecha:
+            self.dia = self.fecha.weekday()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{DIAS[self.dia]} {self.inicio:%H:%M} {self.titulo}"
@@ -54,6 +60,8 @@ class Cumplimiento(models.Model):
     estado = models.CharField(max_length=12, choices=Estado.choices)
     auto = models.BooleanField(default=False, help_text="Marcada por el sistema al vencer el horario")
     actualizado = models.DateTimeField(auto_now=True)
+    nueva = models.ForeignKey(Bloque, null=True, blank=True, on_delete=models.SET_NULL, related_name="origenes",
+                              help_text="Si está reprogramada: la actividad puntual creada para la nueva fecha")
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["bloque", "fecha"], name="uniq_bloque_fecha")]
@@ -70,6 +78,7 @@ class AccionLanzamiento(models.Model):
     estado = models.CharField(max_length=12, choices=Estado.choices, blank=True)
     auto = models.BooleanField(default=False)
     actualizado = models.DateTimeField(auto_now=True)
+    nueva = models.ForeignKey("self", null=True, blank=True, on_delete=models.SET_NULL, related_name="origenes")
     notas = models.TextField(blank=True)
     orden = models.PositiveSmallIntegerField(default=0)
 

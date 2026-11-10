@@ -87,19 +87,25 @@ class ApiTests(TestCase):
         self.cat = Categoria.objects.create(nombre="X")
         self.b = Bloque.objects.create(dia=0, inicio=time(8), fin=time(9), titulo="b", categoria=self.cat, seguimiento=True)
 
-    def post(self, fecha, estado):
-        return self.client.post("/api/cumplimientos/", {"bloque": self.b.id, "fecha": fecha, "estado": estado}, content_type="application/json")
+    def post(self, fecha, estado, nueva=None, bloque=None):
+        d = {"bloque": (bloque or self.b).id, "fecha": fecha, "estado": estado}
+        if nueva:
+            d["nueva"] = nueva
+        return self.client.post("/api/cumplimientos/", d, content_type="application/json")
+
+    def futuro(self, dias=3, ini="18:00", fin="19:00"):
+        return {"fecha": (timezone.localdate() + timedelta(days=dias)).isoformat(), "inicio": ini, "fin": fin}
 
     def test_manual_cambia_auto_y_pasado_no_vuelve_a_pendiente(self):
         c = Cumplimiento.objects.create(bloque=self.b, fecha=date(2020, 1, 6), estado="no_hecha", auto=True)  # lunes pasado
         r = self.post("2020-01-06", "hecha"); self.assertEqual(r.status_code, 200, r.content)
         c.refresh_from_db(); self.assertEqual((c.estado, c.auto), ("hecha", False))
         self.assertEqual(self.post("2020-01-06", "").status_code, 400)       # pasado: no puede quedar pendiente
-        self.assertEqual(self.post("2020-01-06", "reprogramada").status_code, 200)
+        self.assertEqual(self.post("2020-01-06", "reprogramada", self.futuro()).status_code, 200)
 
     def test_futuro_puede_volver_a_pendiente(self):
         f = (timezone.localdate() + timedelta(days=14)).isoformat()
-        self.assertEqual(self.post(f, "reprogramada").status_code, 200)
+        self.assertEqual(self.post(f, "reprogramada", self.futuro()).status_code, 200)
         self.assertEqual(self.post(f, "").status_code, 200)
         self.assertFalse(Cumplimiento.objects.filter(bloque=self.b).exists())
 
@@ -109,3 +115,73 @@ class ApiTests(TestCase):
         r = self.client.get("/api/state/").json()
         self.assertGreaterEqual(r["cerrados"], 1)
         self.assertEqual(self.client.get("/api/state/").json()["cerrados"], 0)
+
+    # ---- reprogramación ----
+    def test_reprogramada_exige_nueva_fecha_futura_y_horario_valido(self):
+        self.assertEqual(self.post("2020-01-06", "reprogramada").status_code, 400)                       # sin nueva
+        self.assertEqual(self.post("2020-01-06", "reprogramada", self.futuro(ini="19:00", fin="18:00")).status_code, 400)
+        self.assertEqual(self.post("2020-01-06", "reprogramada", self.futuro(dias=-1)).status_code, 400)  # pasado
+        self.assertFalse(Cumplimiento.objects.exists())
+        self.assertEqual(Bloque.objects.count(), 1)
+
+    def test_reprogramada_crea_bloque_puntual_en_el_dia(self):
+        n = self.futuro(dias=3)
+        self.assertEqual(self.post("2020-01-06", "reprogramada", n).status_code, 200)
+        c = Cumplimiento.objects.get(bloque=self.b)
+        p = c.nueva
+        self.assertEqual((c.estado, c.auto), ("reprogramada", False))
+        self.assertEqual((p.fecha.isoformat(), p.inicio.strftime("%H:%M"), p.fin.strftime("%H:%M")), (n["fecha"], "18:00", "19:00"))
+        self.assertEqual((p.titulo, p.categoria_id, p.seguimiento), (self.b.titulo, self.cat.id, True))
+        self.assertEqual(p.dia, p.fecha.weekday())
+
+    def test_reprogramar_de_nuevo_mueve_la_misma_actividad(self):
+        self.post("2020-01-06", "reprogramada", self.futuro(dias=3))
+        self.post("2020-01-06", "reprogramada", self.futuro(dias=5, ini="10:00", fin="10:30"))
+        self.assertEqual(Bloque.objects.filter(fecha__isnull=False).count(), 1)
+        p = Cumplimiento.objects.get(bloque=self.b).nueva
+        self.assertEqual(p.inicio.strftime("%H:%M"), "10:00")
+
+    def test_cambiar_de_reprogramada_a_hecha_quita_la_copia_pendiente(self):
+        self.post("2020-01-06", "reprogramada", self.futuro())
+        self.post("2020-01-06", "hecha")
+        self.assertEqual(Bloque.objects.filter(fecha__isnull=False).count(), 0)
+        self.assertIsNone(Cumplimiento.objects.get(bloque=self.b).nueva)
+
+    def test_copia_con_estado_propio_no_se_borra(self):
+        self.post("2020-01-06", "reprogramada", self.futuro())
+        p = Cumplimiento.objects.get(bloque=self.b).nueva
+        self.post(self.futuro()["fecha"], "hecha", bloque=p)
+        self.post("2020-01-06", "no_hecha")
+        self.assertTrue(Bloque.objects.filter(pk=p.pk).exists())
+
+    def test_state_muestra_puntual_solo_en_su_semana_y_origen(self):
+        n = self.futuro(dias=3)
+        self.post("2020-01-06", "reprogramada", n)
+        p = Cumplimiento.objects.get(bloque=self.b).nueva
+        d = date.fromisoformat(n["fecha"])
+        en = self.client.get(f"/api/state/?week={d.isoformat()}").json()
+        self.assertIn(p.id, [x["id"] for x in en["bloques"]])
+        self.assertEqual(en["origenes"][str(p.id)], "2020-01-06")
+        lejos = self.client.get(f"/api/state/?week={(d + timedelta(days=21)).isoformat()}").json()
+        self.assertNotIn(p.id, [x["id"] for x in lejos["bloques"]])
+        self.assertIn(self.b.id, [x["id"] for x in lejos["bloques"]])   # la plantilla recurrente siempre está
+
+    def test_puntual_vence_solo_en_su_fecha(self):
+        from .services import cerrar_vencidos
+        hoy = timezone.localdate()
+        p = Bloque.objects.create(dia=(hoy - timedelta(days=2)).weekday(), fecha=hoy - timedelta(days=2), inicio=time(8), fin=time(9),
+                                  titulo="p", categoria=self.cat, seguimiento=True, creado=timezone.now() - timedelta(days=5))
+        Bloque.objects.filter(pk=self.b.pk).delete()
+        cfg = Config.get(); cfg.inicio_seguimiento = timezone.now() - timedelta(days=9); cfg.save()
+        cerrar_vencidos()
+        self.assertEqual(list(Cumplimiento.objects.filter(bloque=p).values_list("fecha", flat=True)), [hoy - timedelta(days=2)])
+
+    def test_reprogramar_accion(self):
+        a = AccionLanzamiento.objects.create(semana=date(2020, 1, 6), accion="x", cuando="mar", fecha=date(2020, 1, 7))
+        f = timezone.localdate() + timedelta(days=9)
+        self.assertEqual(self.client.post(f"/api/acciones/{a.id}/reprogramar/", {"fecha": "2020-01-01"}, content_type="application/json").status_code, 400)
+        self.assertEqual(self.client.post(f"/api/acciones/{a.id}/reprogramar/", {"fecha": f.isoformat()}, content_type="application/json").status_code, 200)
+        a.refresh_from_db()
+        self.assertEqual((a.estado, a.auto), ("reprogramada", False))
+        n = a.nueva
+        self.assertEqual((n.fecha, n.semana, n.estado, n.accion), (f, f - timedelta(days=f.weekday()), "", "x"))

@@ -88,7 +88,10 @@ const BloqueModal = (() => {
     const b = bloque || {titulo: '', nota: '', categoria: categorias[0]?.id, seguimiento: false, dia, inicio, fin};
     form.titulo.value = b.titulo; form.nota.value = b.nota; form.categoria.value = b.categoria;
     form.inicio.value = b.inicio; form.fin.value = b.fin; form.seguimiento.checked = b.seguimiento; form.dia.value = b.dia;
-    $('#diasMulti').classList.toggle('d-none', !!bloque); $('#diaUno').classList.toggle('d-none', !bloque);
+    const puntual = !!bloque?.fecha;   // actividad puntual (p. ej. una reprogramación): se edita por fecha, no por día de la semana
+    form.fecha.value = bloque?.fecha || '';
+    $('#diasMulti').classList.toggle('d-none', !!bloque); $('#diaUno').classList.toggle('d-none', !bloque || puntual);
+    $('#fechaUno').classList.toggle('d-none', !puntual);
     $$('#diasChecks input').forEach(c => c.checked = !bloque && +c.value === b.dia);
     $('#bloqueDel').classList.toggle('d-none', !bloque); $('#bloqueErr').textContent = '';
     modal.show(); setTimeout(() => form.titulo.focus(), 300);
@@ -99,7 +102,7 @@ const BloqueModal = (() => {
     const data = {titulo: form.titulo.value.trim(), nota: form.nota.value.trim(), categoria: form.categoria.value,
       inicio: form.inicio.value, fin: form.fin.value, seguimiento: form.seguimiento.checked};
     try {
-      if (cur) await api('PUT', `/api/bloques/${cur.id}/`, {...data, dia: form.dia.value});
+      if (cur) await api('PUT', `/api/bloques/${cur.id}/`, {...data, dia: form.dia.value, fecha: cur.fecha ? form.fecha.value : ''});
       else {
         const dias = $$('#diasChecks input:checked').map(c => +c.value);
         if (!dias.length) { $('#bloqueErr').textContent = 'Elegí al menos un día.'; return; }
@@ -113,4 +116,37 @@ const BloqueModal = (() => {
     await safe(() => api('DELETE', `/api/bloques/${cur.id}/`))(); modal.hide(); onSave && onSave();
   });
   return {open};
+})();
+
+
+/* ---------- modal de reprogramación: resuelve {fecha, inicio, fin} o undefined si se cancela ---------- */
+const ReprogModal = (() => {
+  const el = $('#reprogModal'), form = $('#reprogForm'), modal = new bootstrap.Modal(el);
+  let done = null, conHora = true;
+  const hoy = () => iso(new Date());
+
+  form.querySelectorAll('[data-dias]').forEach(b => b.onclick = () => { form.fecha.value = iso(addDays(new Date(), +b.dataset.dias)); });
+  el.addEventListener('hidden.bs.modal', () => { const d = done; done = null; d && d(undefined); });
+  form.addEventListener('submit', ev => {
+    ev.preventDefault();
+    const v = {fecha: form.fecha.value, inicio: form.inicio.value, fin: form.fin.value};
+    const err = !v.fecha ? 'Elegí una fecha.'
+      : v.fecha < hoy() ? 'La fecha no puede ser pasada.'
+      : conHora && (!v.inicio || !v.fin) ? 'Indicá el horario.'
+      : conHora && v.fin <= v.inicio ? 'El fin debe ser posterior al inicio.'
+      : conHora && new Date(`${v.fecha}T${v.fin}`) <= new Date() ? 'La nueva fecha y hora tienen que estar en el futuro.' : '';
+    if (err) { $('#reprogErr').textContent = err; return; }
+    const d = done; done = null; modal.hide(); d && d(v);
+  });
+
+  /* titulo: nombre de la actividad · fecha/inicio/fin: valores iniciales · conHora=false para acciones (solo día) */
+  return {open({titulo, fecha, inicio = '09:00', fin = '10:00', conHora: ch = true}) {
+    conHora = ch; $('#reprogErr').textContent = '';
+    $('#reprogTitulo').textContent = titulo;
+    form.fecha.min = hoy(); form.fecha.value = fecha || iso(addDays(new Date(), 1));
+    form.inicio.value = inicio; form.fin.value = fin;
+    $('#reprogHoras').classList.toggle('d-none', !ch);
+    $('#reprogAyuda').textContent = ch ? 'Se agrega una actividad en ese día y horario.' : 'Se agrega la acción en la semana de esa fecha.';
+    return new Promise(res => { done = res; modal.show(); });
+  }};
 })();

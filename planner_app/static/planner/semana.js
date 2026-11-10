@@ -4,6 +4,9 @@ let week = mondayOf(new Date());    // lunes visible
 let day = new Date();               // día visible en modo "día"
 let modo = localStorage.getItem('modo') || (innerWidth < 768 ? 'dia' : 'semana');
 
+// ¿el bloque se muestra en el día i de la semana visible? (las puntuales solo en su fecha)
+const enDia = (b, i) => b.dia === i && (!b.fecha || b.fecha === iso(addDays(week, i)));
+const fechaCorta = f => { const d = parse(f); return `${DIAS[(d.getDay()+6)%7].slice(0,3).toLowerCase()} ${fmtDay(d)}`; };
 const catOf = id => S.categorias.find(c => c.id === id);
 const cumpl = (b, fecha) => S.cumplimientos[`${b.id}|${iso(fecha)}`] || {estado: '', auto: false};
 const estadoDe = (b, fecha) => cumpl(b, fecha).estado;
@@ -55,32 +58,34 @@ function renderSemana() {
   const hours = Array.from({length: (d1-d0)/60}, (_, i) => `<div>${String((d0/60)+i).padStart(2,'0')}:00</div>`).join('');
   const cols = DIAS.map((_, i) => {
     const f = addDays(week, i);
-    const blks = layoutDay(S.bloques.filter(b => b.dia === i)).map(({b, col, n}) => blockEl(b, f, d0, px, col, n)).join('');
+    const blks = layoutDay(S.bloques.filter(b => enDia(b, i))).map(({b, col, n}) => blockEl(b, f, d0, px, col, n)).join('');
     return `<div class="wk-col ${iso(f) === hoy ? 'today' : ''}" data-dia="${i}" style="height:${(d1-d0)/60*px}px">${blks}</div>`;
   }).join('');
   return `<div class="wk-wrap"><div class="wk"><div></div>${heads}<div class="wk-hours">${hours}</div>${cols}</div></div>`;
 }
 
 function blockEl(b, f, d0, px, col, n) {
-  const c = catOf(b.categoria), {estado: e, auto} = b.seguimiento ? cumpl(b, f) : {estado: ''};
+  const c = catOf(b.categoria), {estado: e, auto, nueva} = b.seguimiento ? cumpl(b, f) : {estado: ''};
   const top = (mins(b.inicio) - d0) / 60 * px, h = Math.max((mins(b.fin) - mins(b.inicio)) / 60 * px, 14);
   return `<div class="blk ${e === 'hecha' ? 'done' : e === 'no_hecha' ? 'skip' : e === 'reprogramada' ? 'repro' : ''}" data-id="${b.id}" data-fecha="${iso(f)}"
-    title="${esc(b.titulo)} ${b.inicio}–${b.fin}${b.nota ? ' · ' + esc(b.nota) : ''}"
+    title="${esc(b.titulo)} ${b.inicio}–${b.fin}${b.nota ? ' · ' + esc(b.nota) : ''}${S.origenes[b.id] ? ' · reprogramada desde el ' + fechaCorta(S.origenes[b.id]) : ''}${nueva ? ' · reprogramada para el ' + fechaCorta(nueva.fecha) + ' ' + nueva.inicio : ''}"
     style="top:${top}px;height:${h}px;left:calc(${col/n*100}% + 1px);width:calc(${100/n}% - 2px);background:${c.color};color:${textColor(c.color)}">
-    <div class="t"><b>${esc(b.titulo)}</b>${h > 40 ? `<span class="n">${b.inicio}–${b.fin}</span>` : ''}</div>${b.seguimiento ? stBtn(e, false, auto).replace('<button', h < 26 ? `<button style="width:${h-4}px;height:${h-4}px;font-size:9px"` : '<button') : ''}</div>`;
+    <div class="t"><b>${S.origenes[b.id] ? '↻ ' : ''}${esc(b.titulo)}</b>${h > 40 ? `<span class="n">${b.inicio}–${b.fin}</span>` : ''}</div>${b.seguimiento ? stBtn(e, false, auto).replace('<button', h < 26 ? `<button style="width:${h-4}px;height:${h-4}px;font-size:9px"` : '<button') : ''}</div>`;
 }
 
 /* ----- vista día ----- */
 function renderDia() {
   const i = (day.getDay() + 6) % 7, f = day;
   if (iso(mondayOf(f)) !== iso(week)) return '';   // se recarga al cambiar de semana
-  const items = S.bloques.filter(b => b.dia === i).sort((a, b) => mins(a.inicio) - mins(b.inicio)).map(b => {
-    const c = catOf(b.categoria), {estado: e, auto} = b.seguimiento ? cumpl(b, f) : {estado: ''};
+  const items = S.bloques.filter(b => enDia(b, i)).sort((a, b) => mins(a.inicio) - mins(b.inicio)).map(b => {
+    const c = catOf(b.categoria), {estado: e, auto, nueva} = b.seguimiento ? cumpl(b, f) : {estado: ''};
     return `<div class="day-card" data-id="${b.id}" data-fecha="${iso(f)}" style="border-color:${c.color === '#FFFFFF' ? '#ced4da' : c.color}">
       <div class="day-time">${b.inicio}–${b.fin}</div>
       <div class="flex-grow-1 ${e === 'hecha' || e === 'reprogramada' ? 'text-decoration-line-through text-muted' : ''}"><b>${esc(b.titulo)}</b>
         <span class="badge ms-1" style="background:${c.color};color:${textColor(c.color)};border:1px solid rgba(0,0,0,.15)">${esc(c.nombre)}</span>
         ${b.nota ? `<div class="small text-muted">${esc(b.nota)}</div>` : ''}
+        ${S.origenes[b.id] ? `<div class="repro-tag">↻ Reprogramada desde el ${fechaCorta(S.origenes[b.id])}</div>` : ''}
+        ${nueva ? `<div class="repro-tag">↻ Reprogramada para el ${fechaCorta(nueva.fecha)} · ${nueva.inicio}–${nueva.fin}</div>` : ''}
         ${auto ? '<div class="auto-tag">Marcada automáticamente al vencer. Tocá el círculo si la hiciste.</div>' : ''}</div>
       ${b.seguimiento ? stBtn(e, true, auto) : ''}</div>`;
   }).join('') || '<p class="text-muted">Nada planificado este día.</p>';
@@ -103,13 +108,24 @@ $('#vista').addEventListener('click', safe(async ev => {
     const a = S.acciones.find(x => x.id === +acc.dataset.accion);
     const v = await pickEstado(st, {actual: a.estado, pasado: pasadaAccion(a)});
     if (v === undefined || v === a.estado) return;
+    if (v === 'reprogramada') {
+      const n = await ReprogModal.open({titulo: a.accion, conHora: false, fecha: a.nueva_fecha});
+      if (!n) return;
+      await api('POST', `/api/acciones/${a.id}/reprogramar/`, {fecha: n.fecha}); return load();
+    }
     await api('PUT', `/api/acciones/${a.id}/`, {...a, estado: v}); return load();
   }
   if (st && card) {
     const b = S.bloques.find(x => x.id === +card.dataset.id);
     const v = await pickEstado(st, {actual: st.dataset.st, pasado: pasadoBloque(card.dataset.fecha, b)});
     if (v === undefined || v === st.dataset.st) return;
-    await api('POST', '/api/cumplimientos/', {bloque: b.id, fecha: card.dataset.fecha, estado: v});
+    let nueva;
+    if (v === 'reprogramada') {   // hay que decir para cuándo: se agrega la actividad en ese día
+      const prev = S.cumplimientos[`${b.id}|${card.dataset.fecha}`]?.nueva;
+      nueva = await ReprogModal.open({titulo: `${b.titulo} · ${b.inicio}–${b.fin}`, ...(prev || {inicio: b.inicio, fin: b.fin})});
+      if (!nueva) return;
+    }
+    await api('POST', '/api/cumplimientos/', {bloque: b.id, fecha: card.dataset.fecha, estado: v, nueva});
     return load();
   }
   if (card) return open(S.bloques.find(b => b.id === +card.dataset.id));

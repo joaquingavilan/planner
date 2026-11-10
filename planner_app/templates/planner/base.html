@@ -53,6 +53,7 @@
       </div>
       <div id="diasMulti"><label class="form-label">Días</label><div class="d-flex flex-wrap gap-2" id="diasChecks"></div></div>
       <div id="diaUno" class="d-none"><label class="form-label">Día</label><select class="form-select" name="dia"></select></div>
+      <div id="fechaUno" class="d-none"><label class="form-label">Fecha (actividad puntual)</label><input type="date" class="form-control" name="fecha"></div>
       <div><label class="form-label">Nota</label><input class="form-control" name="nota" maxlength="300"></div>
       <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="seguimiento" id="segChk">
         <label class="form-check-label" for="segChk">Marcar como hecha / no hecha</label></div>
@@ -62,6 +63,33 @@
       <button type="button" class="btn btn-outline-danger me-auto d-none" id="bloqueDel">Eliminar</button>
       <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
       <button class="btn btn-primary">Guardar</button>
+    </div>
+  </form></div>
+</div>
+
+<!-- Modal de reprogramación -->
+<div class="modal fade" id="reprogModal" tabindex="-1">
+  <div class="modal-dialog modal-fullscreen-sm-down"><form class="modal-content" id="reprogForm" novalidate>
+    <div class="modal-header"><h5 class="modal-title">↻ Reprogramar</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body vstack gap-3">
+      <div class="fw-semibold" id="reprogTitulo"></div>
+      <div class="d-flex flex-wrap gap-2" id="reprogChips">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-dias="0">Hoy</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-dias="1">Mañana</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-dias="7">En 1 semana</button>
+      </div>
+      <div><label class="form-label">¿Para cuándo?</label><input type="date" class="form-control" name="fecha" required></div>
+      <div class="row g-2" id="reprogHoras">
+        <div class="col"><label class="form-label">Desde</label><input type="time" class="form-control" name="inicio" step="300"></div>
+        <div class="col"><label class="form-label">Hasta</label><input type="time" class="form-control" name="fin" step="300"></div>
+      </div>
+      <div class="text-muted small" id="reprogAyuda">Se agrega una actividad en ese día y horario.</div>
+      <div class="text-danger small" id="reprogErr"></div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+      <button class="btn btn-warning">Reprogramar</button>
     </div>
   </form></div>
 </div>

@@ -2,15 +2,17 @@ import json
 from datetime import date, timedelta
 
 from django.db import transaction
+from django.db.models import Q
 from django.db.models import ProtectedError
 from django.contrib.auth.decorators import login_not_required
 from django.http import HttpResponse, JsonResponse
-from django.shortcuts import render
+from django.shortcuts import get_object_or_404, render
+from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
-from .forms import AccionForm, BloqueForm, CategoriaForm, ConfigForm, CumplimientoForm
+from .forms import AccionForm, BloqueForm, CategoriaForm, ConfigForm, CumplimientoForm, ReprogForm
 from .services import cerrar_vencidos, ya_vencio
-from .models import DIAS, AccionLanzamiento, Bloque, Categoria, Config, Cumplimiento
+from .models import DIAS, AccionLanzamiento, Bloque, Categoria, Config, Cumplimiento, Estado
 
 
 # ---------- páginas ----------
@@ -55,12 +57,14 @@ def ser_cat(c):
 
 def ser_bloque(b):
     return {"id": b.id, "dia": b.dia, "inicio": b.inicio.strftime("%H:%M"), "fin": b.fin.strftime("%H:%M"),
-            "titulo": b.titulo, "nota": b.nota, "categoria": b.categoria_id, "seguimiento": b.seguimiento}
+            "titulo": b.titulo, "nota": b.nota, "categoria": b.categoria_id, "seguimiento": b.seguimiento,
+            "fecha": b.fecha.isoformat() if b.fecha else ""}
 
 
 def ser_accion(a):
     return {"id": a.id, "semana": a.semana.isoformat(), "cuando": a.cuando, "donde": a.donde, "accion": a.accion,
-            "fecha": a.fecha.isoformat() if a.fecha else "", "estado": a.estado, "auto": a.auto, "notas": a.notas, "orden": a.orden}
+            "fecha": a.fecha.isoformat() if a.fecha else "", "estado": a.estado, "auto": a.auto,
+            "nueva_fecha": a.nueva.fecha.isoformat() if a.nueva_id and a.nueva.fecha else "", "notas": a.notas, "orden": a.orden}
 
 
 def crud(request, pk, Model, Form, ser, data=None):
@@ -86,16 +90,24 @@ def api_state(request):
     semana = parse_week(request.GET.get("week"))
     fechas = [semana + timedelta(days=i) for i in range(7)]
     cfg = Config.get()
+    bloques = list(Bloque.objects.filter(Q(fecha__isnull=True) | Q(fecha__in=fechas)))   # plantilla + puntuales de la semana
+    cumpls = list(Cumplimiento.objects.filter(fecha__in=fechas).select_related("nueva"))
+    puntuales = [b.id for b in bloques if b.fecha]
     return JsonResponse({
         "semana": semana.isoformat(),
         "cerrados": cerrados,
         "dias": DIAS,
         "config": {"grilla_desde": cfg.grilla_desde, "grilla_hasta": cfg.grilla_hasta},
         "categorias": [ser_cat(c) for c in Categoria.objects.all()],
-        "bloques": [ser_bloque(b) for b in Bloque.objects.all()],
-        "cumplimientos": {f"{c.bloque_id}|{c.fecha.isoformat()}": {"estado": c.estado, "auto": c.auto}
-                          for c in Cumplimiento.objects.filter(fecha__in=fechas)},
-        "acciones": [ser_accion(a) for a in AccionLanzamiento.objects.filter(semana=semana)],
+        "bloques": [ser_bloque(b) for b in bloques],
+        "cumplimientos": {f"{c.bloque_id}|{c.fecha.isoformat()}": {
+            "estado": c.estado, "auto": c.auto,
+            "nueva": ({"fecha": c.nueva.fecha.isoformat(), "inicio": c.nueva.inicio.strftime("%H:%M"),
+                       "fin": c.nueva.fin.strftime("%H:%M")} if c.nueva_id else None)} for c in cumpls},
+        # puntual -> fecha de la ocurrencia original de la que viene (para rotularla «reprogramada desde»)
+        "origenes": {str(n): f.isoformat() for n, f in
+                     Cumplimiento.objects.filter(nueva__in=puntuales).values_list("nueva_id", "fecha")},
+        "acciones": [ser_accion(a) for a in AccionLanzamiento.objects.filter(semana=semana).select_related("nueva")],
     })
 
 
@@ -121,27 +133,85 @@ def bloques(request, pk=None):
     return crud(request, pk, Bloque, BloqueForm, ser_bloque, data)
 
 
+def desligar(c):
+    """Quita la actividad puntual creada por una reprogramación (si todavía no tiene estado propio)."""
+    n = c.nueva
+    if n:
+        c.nueva = None
+        c.save(update_fields=["nueva"])
+        if not n.cumplimientos.exists():
+            n.delete()
+
+
 @require_http_methods(["POST"])
 def cumplimiento(request):
-    """Fija el estado manual de un bloque en una fecha. Estado vacío = volver a pendiente (solo si aún no venció)."""
+    """Fija el estado manual de un bloque en una fecha.
+
+    - estado vacío: vuelve a pendiente (solo si aún no venció).
+    - «reprogramada»: exige `nueva` {fecha, inicio, fin} y crea (o mueve) la actividad puntual de ese día.
+    """
     data = body(request)
-    if not data.get("estado"):
-        b = Bloque.objects.filter(pk=data.get("bloque")).first()
-        try:
-            fecha = date.fromisoformat(data.get("fecha", ""))
-        except ValueError:
-            fecha = None
-        if not b or not fecha:
-            return JsonResponse({"errors": {"__all__": ["Datos inválidos."]}}, status=400)
+    b = Bloque.objects.filter(pk=data.get("bloque")).first()
+    try:
+        fecha = date.fromisoformat(data.get("fecha", ""))
+    except ValueError:
+        fecha = None
+    if not b or not fecha:
+        return JsonResponse({"errors": {"__all__": ["Datos inválidos."]}}, status=400)
+    estado = data.get("estado") or ""
+
+    if not estado:
         if ya_vencio(fecha, b):
             return JsonResponse({"errors": {"__all__": ["Una actividad que ya pasó no puede quedar pendiente."]}}, status=400)
-        Cumplimiento.objects.filter(bloque=b, fecha=fecha).delete()
+        for c in Cumplimiento.objects.filter(bloque=b, fecha=fecha):
+            desligar(c)
+            c.delete()
         return JsonResponse({"ok": True})
-    form = CumplimientoForm(data)
-    if not form.is_valid():
-        return errors(form)
-    c = form.cleaned_data
-    Cumplimiento.objects.update_or_create(bloque=c["bloque"], fecha=c["fecha"], defaults={"estado": c["estado"], "auto": False})
+
+    if estado not in Estado.values:
+        return JsonResponse({"errors": {"estado": ["Estado inválido."]}}, status=400)
+
+    with transaction.atomic():
+        if estado == Estado.REPROGRAMADA:
+            rf = ReprogForm(data.get("nueva") or {})
+            if not rf.is_valid():
+                return errors(rf)
+            n = rf.cleaned_data
+            c, _ = Cumplimiento.objects.update_or_create(bloque=b, fecha=fecha, defaults={"estado": estado, "auto": False})
+            if c.nueva:   # ya estaba reprogramada: se mueve la actividad existente
+                p = c.nueva
+                p.fecha, p.inicio, p.fin = n["fecha"], n["inicio"], n["fin"]
+                p.save()
+            else:
+                c.nueva = Bloque.objects.create(
+                    fecha=n["fecha"], dia=n["fecha"].weekday(), inicio=n["inicio"], fin=n["fin"], titulo=b.titulo, nota=b.nota,
+                    categoria=b.categoria, seguimiento=True)
+                c.save(update_fields=["nueva"])
+        else:
+            c, _ = Cumplimiento.objects.update_or_create(bloque=b, fecha=fecha, defaults={"estado": estado, "auto": False})
+            desligar(c)
+    return JsonResponse({"ok": True})
+
+
+@require_http_methods(["POST"])
+def reprogramar_accion(request, pk):
+    """Marca la acción como reprogramada y crea su copia pendiente en la semana de la nueva fecha."""
+    a = get_object_or_404(AccionLanzamiento, pk=pk)
+    try:
+        f = date.fromisoformat(body(request).get("fecha", ""))
+    except ValueError:
+        return JsonResponse({"errors": {"fecha": ["Fecha inválida."]}}, status=400)
+    if f < timezone.localdate():
+        return JsonResponse({"errors": {"fecha": ["La nueva fecha no puede ser pasada."]}}, status=400)
+    with transaction.atomic():
+        a.estado, a.auto = Estado.REPROGRAMADA, False
+        if a.nueva:
+            a.nueva.fecha, a.nueva.semana = f, monday(f)
+            a.nueva.save()
+        else:
+            a.nueva = AccionLanzamiento.objects.create(semana=monday(f), cuando=a.cuando, donde=a.donde, accion=a.accion,
+                                                       fecha=f, notas=a.notas, orden=a.orden)
+        a.save()
     return JsonResponse({"ok": True})
 
 

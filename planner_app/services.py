@@ -35,7 +35,7 @@ def cerrar_vencidos(now=None):
     d = desde
     while d <= hoy:
         for b in bloques:
-            if b.dia == d.weekday() and (b.id, d) not in existentes:
+            if (b.fecha == d if b.fecha else b.dia == d.weekday()) and (b.id, d) not in existentes:
                 fin = ocurrencia_fin(d, b)
                 if b.creado < fin <= now:
                     nuevos.append(Cumplimiento(bloque=b, fecha=d, estado=Estado.NO_HECHA, auto=True))

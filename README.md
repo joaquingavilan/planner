@@ -42,3 +42,10 @@ Cada actividad con seguimiento (y cada acción de lanzamiento) tiene un estado: 
 - Un estado cargado a mano nunca se pisa. Para corregir un cierre automático, tocá el círculo y elegí «Hecha» o «Reprogramada».
 - Lo que ya pasó no puede volver a «Pendiente» (el sistema lo volvería a cerrar). Las actividades solo cuentan desde que fueron creadas, así que agregar un horario nuevo no genera «no hechas» hacia atrás.
 - Para reportes: `Cumplimiento(bloque, fecha, estado, auto, actualizado)` y `AccionLanzamiento(estado, auto, actualizado)` distinguen lo marcado por el sistema de lo marcado por vos.
+
+## Reprogramar
+Al elegir «Reprogramada» se pide **para cuándo** (fecha y horario; en las acciones de lanzamiento, solo la fecha).
+- Se crea una actividad **puntual** en ese día (mismo título, categoría y seguimiento), rotulada «↻ Reprogramada desde el …». La original queda «Reprogramada para el …».
+- Reprogramar de nuevo mueve esa misma actividad; si cambiás la original a otro estado, la copia se elimina mientras siga pendiente (si ya tiene estado propio se conserva).
+- La actividad puntual también vence sola, pero solo en su fecha. Se edita (fecha/horario) tocándola. La plantilla semanal de Configuración muestra solo las recurrentes.
+- Modelo: `Bloque.fecha` (puntual si no es nulo) y `Cumplimiento.nueva` / `AccionLanzamiento.nueva` enlazan origen y destino, útiles para reportes.

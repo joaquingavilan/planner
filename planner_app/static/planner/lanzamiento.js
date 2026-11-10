@@ -26,6 +26,7 @@ function render() {
           ${Object.entries(ESTADOS).filter(([v]) => !(v === '' && pasadaAccion(a))).map(([v, e]) =>
             `<button class="btn btn-sm btn-${a.estado === v ? '' : 'outline-'}${e.c}" data-estado="${v}">${e.i} ${e.t}</button>`).join('')}
         </div>
+        ${a.estado === 'reprogramada' && a.nueva_fecha ? `<div class="repro-tag mt-2">↻ Reprogramada para el ${fmtDay(parse(a.nueva_fecha))}</div>` : ''}
         ${a.auto ? '<div class="auto-tag mt-2">Marcada automáticamente al vencer. Corregila si la hiciste.</div>' : ''}
       </div></div></div>`).join('') || '<p class="text-muted">Sin acciones esta semana. Elegí las 3 con «+ Acción» o copiá las de la semana anterior.</p>';
 }
@@ -35,7 +36,13 @@ $('#lista').addEventListener('click', safe(async ev => {
   const a = S.acciones.find(x => x.id === +card.dataset.id);
   if (ev.target.closest('[data-edit]')) return openModal(a);
   const b = ev.target.closest('[data-estado]');
-  if (b) { await api('PUT', `/api/acciones/${a.id}/`, {...a, estado: b.dataset.estado}); load(); }
+  if (!b) return;
+  if (b.dataset.estado === 'reprogramada') {
+    const n = await ReprogModal.open({titulo: a.accion, conHora: false, fecha: a.nueva_fecha});
+    if (!n) return;
+    await api('POST', `/api/acciones/${a.id}/reprogramar/`, {fecha: n.fecha});
+  } else await api('PUT', `/api/acciones/${a.id}/`, {...a, estado: b.dataset.estado});
+  load();
 }));
 
 function openModal(a) {

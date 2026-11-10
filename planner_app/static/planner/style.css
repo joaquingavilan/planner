@@ -87,3 +87,4 @@ html, body { overscroll-behavior-y: none; -webkit-tap-highlight-color: transpare
 }
 .btn-outline-warning { --bs-btn-color:#a16207; --bs-btn-border-color:#d97706; --bs-btn-hover-color:#fff; --bs-btn-hover-bg:#d97706; --bs-btn-hover-border-color:#d97706; }
 .estado-menu .btn-warning, .btn-group .btn-warning { color:#fff; background:#d97706; border-color:#d97706; }
+.repro-tag { font-size:.72rem; color:#a16207; font-weight:600; }

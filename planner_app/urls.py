@@ -16,6 +16,7 @@ urlpatterns = [
     path("api/acciones/", views.acciones),
     path("api/acciones/<int:pk>/", views.acciones),
     path("api/acciones/copiar/", views.copiar_acciones),
+    path("api/acciones/<int:pk>/reprogramar/", views.reprogramar_accion),
     path("api/config/", views.config),
     path("login/", auth_views.LoginView.as_view(template_name="planner/login.html"), name="login"),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
