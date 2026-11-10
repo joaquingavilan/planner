@@ -1,5 +1,6 @@
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils import timezone
 
 DIAS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
 
@@ -7,6 +8,7 @@ DIAS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Doming
 class Estado(models.TextChoices):
     HECHA = "hecha", "Hecha"
     NO_HECHA = "no_hecha", "No hecha"
+    REPROGRAMADA = "reprogramada", "Reprogramada"
 
 
 class Categoria(models.Model):
@@ -31,6 +33,7 @@ class Bloque(models.Model):
     nota = models.CharField(max_length=300, blank=True)
     categoria = models.ForeignKey(Categoria, on_delete=models.PROTECT, related_name="bloques")
     seguimiento = models.BooleanField(default=False, help_text="Permite marcar hecha / no hecha")
+    creado = models.DateTimeField(default=timezone.now, editable=False)  # no se vencen ocurrencias anteriores
 
     class Meta:
         ordering = ["dia", "inicio"]
@@ -48,7 +51,9 @@ class Cumplimiento(models.Model):
 
     bloque = models.ForeignKey(Bloque, on_delete=models.CASCADE, related_name="cumplimientos")
     fecha = models.DateField()
-    estado = models.CharField(max_length=10, choices=Estado.choices)
+    estado = models.CharField(max_length=12, choices=Estado.choices)
+    auto = models.BooleanField(default=False, help_text="Marcada por el sistema al vencer el horario")
+    actualizado = models.DateTimeField(auto_now=True)
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["bloque", "fecha"], name="uniq_bloque_fecha")]
@@ -62,7 +67,9 @@ class AccionLanzamiento(models.Model):
     donde = models.CharField(max_length=120, blank=True)
     accion = models.CharField(max_length=300)
     fecha = models.DateField(null=True, blank=True)
-    estado = models.CharField(max_length=10, choices=Estado.choices, blank=True)
+    estado = models.CharField(max_length=12, choices=Estado.choices, blank=True)
+    auto = models.BooleanField(default=False)
+    actualizado = models.DateTimeField(auto_now=True)
     notas = models.TextField(blank=True)
     orden = models.PositiveSmallIntegerField(default=0)
 
@@ -79,6 +86,8 @@ class Config(models.Model):
 
     grilla_desde = models.PositiveSmallIntegerField(default=7)
     grilla_hasta = models.PositiveSmallIntegerField(default=22)
+    inicio_seguimiento = models.DateTimeField(default=timezone.now, editable=False)
+    ultimo_cierre = models.DateField(null=True, blank=True, editable=False)  # último día revisado por cerrar_vencidos
 
     def clean(self):
         if not (0 <= self.grilla_desde <= 23 and 1 <= self.grilla_hasta <= 24):

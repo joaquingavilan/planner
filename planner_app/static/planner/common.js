@@ -40,10 +40,38 @@ function toast(msg, kind = 'danger') {
 }
 const safe = fn => async (...a) => { try { return await fn(...a); } catch (e) { if (e.errors) toast(errText(e)); else throw e; } };
 
-/* estado: '' -> hecha -> no_hecha -> '' */
-const NEXT = {'': 'hecha', hecha: 'no_hecha', no_hecha: ''};
-const stBtn = (estado, big = false) =>
-  `<button type="button" class="st ${estado} ${big ? 'st-lg' : ''}" data-st="${estado}" title="${estado === 'hecha' ? 'Hecha' : estado === 'no_hecha' ? 'No hecha' : 'Pendiente'}">${estado === 'hecha' ? '✓' : estado === 'no_hecha' ? '✕' : ''}</button>`;
+const pasadoBloque = (fechaIso, b) => { const [y, m, d] = fechaIso.split('-').map(Number), [h, mi] = b.fin.split(':').map(Number); return new Date(y, m-1, d, h, mi) <= new Date(); };
+const pasadaAccion = a => { const hoy0 = parse(iso(new Date())); return (a.fecha ? parse(a.fecha) : addDays(parse(a.semana), 6)) < hoy0; };
+
+/* ---------- estados: '' (pendiente) · hecha · no_hecha · reprogramada ---------- */
+const ESTADOS = {
+  '':           {t: 'Pendiente',    i: '',  c: 'secondary'},
+  hecha:        {t: 'Hecha',        i: '✓', c: 'success'},
+  no_hecha:     {t: 'No hecha',     i: '✕', c: 'danger'},
+  reprogramada: {t: 'Reprogramada', i: '↻', c: 'warning'},
+};
+const stBtn = (estado, big = false, auto = false) =>
+  `<button type="button" class="st ${estado} ${big ? 'st-lg' : ''}" data-st="${estado}" title="${ESTADOS[estado].t}${auto ? ' (automático)' : ''}">${ESTADOS[estado].i}</button>`;
+
+/* menú flotante para elegir estado; resuelve con el estado elegido o undefined si se cancela.
+   Si la actividad ya pasó (pasado=true) no se ofrece «Pendiente»: el sistema la volvería a cerrar. */
+function pickEstado(anchor, {actual = '', pasado = false} = {}) {
+  return new Promise(resolve => {
+    $('#estadoMenu')?.remove();
+    const opts = Object.keys(ESTADOS).filter(k => !(pasado && k === ''));
+    const m = document.createElement('div'); m.id = 'estadoMenu'; m.className = 'estado-menu';
+    m.innerHTML = opts.map(k => `<button class="btn btn-sm btn-${actual === k ? '' : 'outline-'}${ESTADOS[k].c}" data-v="${k}">${ESTADOS[k].i} ${ESTADOS[k].t}</button>`).join('');
+    const close = v => { m.remove(); back.remove(); resolve(v); };
+    const back = document.createElement('div'); back.className = 'estado-back'; back.onclick = () => close(undefined);
+    m.onclick = e => { const b = e.target.closest('[data-v]'); if (b) close(b.dataset.v); };
+    document.body.append(back, m);
+    if (innerWidth >= 768) {  // popover junto al botón; en celular queda como hoja inferior (CSS)
+      const r = anchor.getBoundingClientRect();
+      m.style.top = Math.min(r.bottom + 6, innerHeight - m.offsetHeight - 8) + 'px';
+      m.style.left = Math.max(8, Math.min(r.left - m.offsetWidth + r.width, innerWidth - m.offsetWidth - 8)) + 'px';
+    }
+  });
+}
 
 /* ---------- modal de bloque (alta / edición) ---------- */
 const BloqueModal = (() => {

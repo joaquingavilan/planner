@@ -13,7 +13,7 @@ function render() {
     ? `<b>${hechas}/${A.length || 3}</b> acciones de lanzamiento hechas: el bloque de construir está habilitado.`
     : `<b>Lanzar va primero.</b> Todavía no hiciste ninguna acción de lanzamiento esta semana: sin una, no hay bloque de construir.`;
   $('#lista').innerHTML = A.map((a, i) => `
-    <div class="col-md-6 col-xl-4"><div class="card h-100 ${a.estado === 'hecha' ? 'border-success' : a.estado === 'no_hecha' ? 'border-danger' : ''}">
+    <div class="col-md-6 col-xl-4"><div class="card h-100 ${{hecha: 'border-success', no_hecha: 'border-danger', reprogramada: 'border-warning'}[a.estado] || ''}">
       <div class="card-body" data-id="${a.id}">
         <div class="d-flex align-items-start gap-2">
           <div class="flex-grow-1"><div class="text-muted small">${i+1}. Cuando sea <b>${esc(a.cuando) || '…'}</b>, en <b>${esc(a.donde) || '…'}</b>, voy a</div>
@@ -22,10 +22,11 @@ function render() {
             ${a.notas ? `<div class="small text-muted mt-2">${esc(a.notas)}</div>` : ''}</div>
           <button class="btn btn-sm btn-light" data-edit>Editar</button>
         </div>
-        <div class="btn-group btn-group-sm mt-3 w-100" role="group">
-          ${[['hecha','✓ Hecha','success'],['no_hecha','✕ No hecha','danger'],['','Pendiente','secondary']].map(([v, t, c]) =>
-            `<button class="btn btn-${a.estado === v ? '' : 'outline-'}${c}" data-estado="${v}">${t}</button>`).join('')}
+        <div class="d-flex flex-wrap gap-1 mt-3">
+          ${Object.entries(ESTADOS).filter(([v]) => !(v === '' && pasadaAccion(a))).map(([v, e]) =>
+            `<button class="btn btn-sm btn-${a.estado === v ? '' : 'outline-'}${e.c}" data-estado="${v}">${e.i} ${e.t}</button>`).join('')}
         </div>
+        ${a.auto ? '<div class="auto-tag mt-2">Marcada automáticamente al vencer. Corregila si la hiciste.</div>' : ''}
       </div></div></div>`).join('') || '<p class="text-muted">Sin acciones esta semana. Elegí las 3 con «+ Acción» o copiá las de la semana anterior.</p>';
 }
 

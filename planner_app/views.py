@@ -9,6 +9,7 @@ from django.shortcuts import render
 from django.views.decorators.http import require_http_methods
 
 from .forms import AccionForm, BloqueForm, CategoriaForm, ConfigForm, CumplimientoForm
+from .services import cerrar_vencidos, ya_vencio
 from .models import DIAS, AccionLanzamiento, Bloque, Categoria, Config, Cumplimiento
 
 
@@ -59,7 +60,7 @@ def ser_bloque(b):
 
 def ser_accion(a):
     return {"id": a.id, "semana": a.semana.isoformat(), "cuando": a.cuando, "donde": a.donde, "accion": a.accion,
-            "fecha": a.fecha.isoformat() if a.fecha else "", "estado": a.estado, "notas": a.notas, "orden": a.orden}
+            "fecha": a.fecha.isoformat() if a.fecha else "", "estado": a.estado, "auto": a.auto, "notas": a.notas, "orden": a.orden}
 
 
 def crud(request, pk, Model, Form, ser, data=None):
@@ -81,16 +82,18 @@ def crud(request, pk, Model, Form, ser, data=None):
 # ---------- API ----------
 @require_http_methods(["GET"])
 def api_state(request):
+    cerrados = cerrar_vencidos()  # el cierre ocurre solo al abrir/recargar, sin procesos en segundo plano
     semana = parse_week(request.GET.get("week"))
     fechas = [semana + timedelta(days=i) for i in range(7)]
     cfg = Config.get()
     return JsonResponse({
         "semana": semana.isoformat(),
+        "cerrados": cerrados,
         "dias": DIAS,
         "config": {"grilla_desde": cfg.grilla_desde, "grilla_hasta": cfg.grilla_hasta},
         "categorias": [ser_cat(c) for c in Categoria.objects.all()],
         "bloques": [ser_bloque(b) for b in Bloque.objects.all()],
-        "cumplimientos": {f"{c.bloque_id}|{c.fecha.isoformat()}": c.estado
+        "cumplimientos": {f"{c.bloque_id}|{c.fecha.isoformat()}": {"estado": c.estado, "auto": c.auto}
                           for c in Cumplimiento.objects.filter(fecha__in=fechas)},
         "acciones": [ser_accion(a) for a in AccionLanzamiento.objects.filter(semana=semana)],
     })
@@ -120,15 +123,25 @@ def bloques(request, pk=None):
 
 @require_http_methods(["POST"])
 def cumplimiento(request):
+    """Fija el estado manual de un bloque en una fecha. Estado vacío = volver a pendiente (solo si aún no venció)."""
     data = body(request)
-    form = CumplimientoForm({**data, "estado": data.get("estado") or "hecha"})
-    if not data.get("estado"):  # estado vacío = volver a pendiente
-        Cumplimiento.objects.filter(bloque_id=data.get("bloque"), fecha=data.get("fecha")).delete()
+    if not data.get("estado"):
+        b = Bloque.objects.filter(pk=data.get("bloque")).first()
+        try:
+            fecha = date.fromisoformat(data.get("fecha", ""))
+        except ValueError:
+            fecha = None
+        if not b or not fecha:
+            return JsonResponse({"errors": {"__all__": ["Datos inválidos."]}}, status=400)
+        if ya_vencio(fecha, b):
+            return JsonResponse({"errors": {"__all__": ["Una actividad que ya pasó no puede quedar pendiente."]}}, status=400)
+        Cumplimiento.objects.filter(bloque=b, fecha=fecha).delete()
         return JsonResponse({"ok": True})
+    form = CumplimientoForm(data)
     if not form.is_valid():
         return errors(form)
     c = form.cleaned_data
-    Cumplimiento.objects.update_or_create(bloque=c["bloque"], fecha=c["fecha"], defaults={"estado": c["estado"]})
+    Cumplimiento.objects.update_or_create(bloque=c["bloque"], fecha=c["fecha"], defaults={"estado": c["estado"], "auto": False})
     return JsonResponse({"ok": True})
 
 

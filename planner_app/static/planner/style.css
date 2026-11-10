@@ -73,3 +73,17 @@ html, body { overscroll-behavior-y: none; -webkit-tap-highlight-color: transpare
 .cat-row { display: grid; grid-template-columns: 48px 1fr 64px; gap: 6px; align-items: center; padding-bottom: 8px; border-bottom: 1px solid #eef0f2; }
 .cat-row [data-save] { grid-column: 2 / 3; } .cat-row [data-del], .cat-row [data-cancel] { grid-column: 3 / 4; }
 @media (min-width: 576px) { .cat-row { grid-template-columns: 48px 1fr 70px auto auto; border: 0; padding: 0; } .cat-row [data-save], .cat-row [data-del], .cat-row [data-cancel] { grid-column: auto; } }
+
+/* ---------- estados ---------- */
+.st.reprogramada { background:#f59e0b; border-color:#f59e0b; color:#fff; }
+.blk.repro { opacity:.6; border-style:dashed; }
+.auto-tag { font-size:.68rem; color:#6c757d; font-style:italic; }
+.estado-back { position:fixed; inset:0; z-index:1900; background:rgba(0,0,0,.25); }
+.estado-menu { position:fixed; z-index:1910; background:#fff; border-radius:12px; padding:8px; display:flex; flex-direction:column; gap:6px;
+  box-shadow:0 8px 24px rgba(0,0,0,.25); min-width:170px; }
+@media (max-width:767.98px) {
+  .estado-menu { left:0; right:0; bottom:0; border-radius:16px 16px 0 0; padding:14px 14px calc(14px + env(safe-area-inset-bottom)); }
+  .estado-menu .btn { padding:.7rem; font-size:1rem; }
+}
+.btn-outline-warning { --bs-btn-color:#a16207; --bs-btn-border-color:#d97706; --bs-btn-hover-color:#fff; --bs-btn-hover-bg:#d97706; --bs-btn-hover-border-color:#d97706; }
+.estado-menu .btn-warning, .btn-group .btn-warning { color:#fff; background:#d97706; border-color:#d97706; }

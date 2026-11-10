@@ -35,3 +35,10 @@ python manage.py runserver
 
 Cada deploy corre `migrate`, `seed` (solo si la base está vacía) y `ensure_user`. Para cambiar la clave, cambiá `APP_PASSWORD` y redeployá.
 Los datos viven en el Postgres de Railway; hacé backups desde su pestaña de la base.
+
+## Estados y cierre automático
+Cada actividad con seguimiento (y cada acción de lanzamiento) tiene un estado: **pendiente → hecha / no hecha / reprogramada**.
+- Al **abrir o recargar** la app, lo pendiente cuyo horario ya terminó pasa solo a «No hecha» (marcado como *automático*). No hay procesos en segundo plano: el cierre corre en `/api/state/` (`planner_app/services.py::cerrar_vencidos`), y si la app estuvo días sin abrirse se ponen al día todos los días intermedios.
+- Un estado cargado a mano nunca se pisa. Para corregir un cierre automático, tocá el círculo y elegí «Hecha» o «Reprogramada».
+- Lo que ya pasó no puede volver a «Pendiente» (el sistema lo volvería a cerrar). Las actividades solo cuentan desde que fueron creadas, así que agregar un horario nuevo no genera «no hechas» hacia atrás.
+- Para reportes: `Cumplimiento(bloque, fecha, estado, auto, actualizado)` y `AccionLanzamiento(estado, auto, actualizado)` distinguen lo marcado por el sistema de lo marcado por vos.

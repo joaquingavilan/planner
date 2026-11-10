@@ -28,7 +28,10 @@ class CumplimientoForm(forms.ModelForm):
         model = Cumplimiento
         fields = ["bloque", "fecha", "estado"]
 
-    def validate_unique(self):  # se resuelve con update_or_create en la vista
+    def validate_unique(self):  # la unicidad (bloque, fecha) se resuelve con update_or_create en la vista
+        pass
+
+    def validate_constraints(self):
         pass
 
 
@@ -36,6 +39,11 @@ class AccionForm(forms.ModelForm):
     class Meta:
         model = AccionLanzamiento
         fields = ["semana", "cuando", "donde", "accion", "fecha", "estado", "notas", "orden"]
+
+    def save(self, commit=True):
+        if "estado" in self.changed_data:  # un cambio manual deja de ser «automático»
+            self.instance.auto = False
+        return super().save(commit)
 
 
 class ConfigForm(forms.ModelForm):
